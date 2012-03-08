@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+
+load File.expand_path('../../lib/trie.rb', __FILE__)
+
+trie = Trie.new
+File.open('/usr/share/dict/words').each_line do |l|
+  trie.insert(l.chomp)
+end
+
+puts trie.autocomplete(ARGV.shift).sort
