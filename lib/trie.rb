@@ -1,46 +1,44 @@
 require 'set'
 class Trie
-  attr_accessor :children, :value, :final
+  attr_accessor :children, :value
 
-  def initialize(value=nil)
-    @children = {}
-    @value = value
-    @final = false
-  end
+  #def initialize
+  #end
 
   def add(char)
-    @children[char] ||= Trie.new( @value.to_s + char)
+    @children ||= {}
+    @children[char] ||= Trie.new
+  end
+
+  def child(letter)
+    @children[letter] if @children
   end
 
   def insert(word)
-    node = self
-    for char in word.chars
-      node.add(char)
-      node = node.children[char]
-    end
-    node.final = true
+    node = word.chars.inject(self, :add)
+    node.value = word
   end
 
   def find(word)
     node = self
     for char in word.chars
-      node = node.children[char] or return
+      node = node.child(char) or return
     end
     node.value
   end
 
-  def all_prefixes
+  def all_finals
     results = Set.new
-    results.add(@value) if @final
-    return results if @children.empty?
-    @children.values.map(&:all_prefixes).inject(results, &:+)
+    results.add(value) if value
+    return results unless @children
+    @children.values.map(&:all_finals).inject(results, &:+)
   end
 
   def autocomplete(prefix)
     node = self
     for char in prefix.chars
-      node = node.children[char] or return Set.new
+      node = node.child(char) or return Set.new
     end
-    node.all_prefixes
+    node.all_finals
   end
 end
