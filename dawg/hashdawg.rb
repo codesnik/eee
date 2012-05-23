@@ -2,54 +2,29 @@
 # based on python program By Steve Hanov, 2011. Released to the public domain.
 
 DICTIONARY = "/usr/share/dict/words"
-DUMP = './words.dump'
+DUMP = './hashwords.dump'
 
 # This class represents a node in the directed acyclic word graph (DAWG). It
 # has a list of edges to other nodes. It has functions for testing whether it
 # is equivalent to another node. Nodes are equivalent if they have identical
 # edges, and each identical edge leads to identical states. The __hash__ and
 # __eq__ functions allow it to be used as a key in a python dictionary.
-class DawgNode
+class DawgNode < Hash
 
-  attr_reader :edges
   attr_accessor :final
 
-  def initialize
-    #@final = false
-    @edges = {}
-  end
-
-  # def to_s
-  #   arr = [ @final ? 1 : 0 ]
-
-  #   for label, node in @edges.sort
-  #     arr << label
-  #     arr << node.object_id.to_s
-  #   end
-
-  #   arr.join('_')
-  # end
-
-  def signature
-    [ @final, @edges.sort.flat_map {|k,v| [k,v.object_id]} ]
-  end
-
-  def hash
-    signature.hash
-  end
+  # def hash наследуем
 
   def eql?(other)
-    #signature == other.signature
-    # так быстрее
-    @final == other.final && @edges == other.edges
+    super && @final == other.final
   end
 
   def all_finals(prefix='')
     results = []
     results << prefix if @final
     # return results unless @edges
-    @edges.each do |letter, node|
-      results += node.all_finals(prefix + letter)
+    each do |letter, node|
+      results += node.all_finals(prefix + letter.to_s)
     end
     results
   end
@@ -105,8 +80,8 @@ class Dawg
 
     for letter in word[common_prefix..-1].chars
       next_node = DawgNode.new
-      node.edges[letter] = next_node
-      @unchecked_nodes << [node, letter, next_node]
+      node[letter.to_sym] = next_node
+      @unchecked_nodes << [node, letter.to_sym, next_node]
       node = next_node
     end
 
@@ -126,7 +101,7 @@ class Dawg
       # минимизированные ноды содержат *эквивалент* текущей ноды?
       if @minimized_nodes.include?(child)
         # replace the child with the previously encountered one
-        parent.edges[letter] = @minimized_nodes[child]
+        parent[letter] = @minimized_nodes[child]
       else
         # add the state to the minimized nodes.
         @minimized_nodes[child] = child
@@ -137,7 +112,7 @@ class Dawg
   def lookup( word )
     node = @root
     for letter in word.chars
-      node = node.edges[letter] or return
+      node = node[letter.to_sym] or return
     end
     node.final
   end
@@ -145,7 +120,7 @@ class Dawg
   def autocomplete(prefix)
     node = @root
     for letter in prefix.chars
-      node = node.edges[letter] or return []
+      node = node[letter.to_sym] or return []
     end
     node.all_finals(prefix)
   end
@@ -155,8 +130,9 @@ class Dawg
   end
 
   def edge_count
-    @minimized_nodes.keys.collect {|node| node.edges.size}.inject(0, :+)
+    @minimized_nodes.keys.collect {|node| node.size}.inject(0, :+)
   end
+
 end
 
 
