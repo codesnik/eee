@@ -15,7 +15,7 @@ class DawgNode
   attr_accessor :final
 
   def initialize
-    @final = false
+    #@final = false
     @edges = {}
   end
 
@@ -39,7 +39,9 @@ class DawgNode
   end
 
   def eql?(other)
-    signature == other.signature
+    #signature == other.signature
+    # так быстрее
+    @final == other.final && @edges == other.edges
   end
 
   def all_finals(prefix='')
@@ -83,7 +85,7 @@ class Dawg
 
     # find common prefix between word and previous word
     common_prefix = 0
-    [word.size, @previous_word.size].min.times do |i|
+    word.size.times do |i|
       break if word[i] != @previous_word[i]
       common_prefix += 1
     end
