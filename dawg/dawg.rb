@@ -2,7 +2,7 @@
 # based on python program By Steve Hanov, 2011. Released to the public domain.
 
 DICTIONARY = "/usr/share/dict/words"
-QUERY = ARGV[1..-1] || []
+DUMP = './words.dump'
 
 # This class represents a node in the directed acyclic word graph (DAWG). It
 # has a list of edges to other nodes. It has functions for testing whether it
@@ -10,36 +10,48 @@ QUERY = ARGV[1..-1] || []
 # edges, and each identical edge leads to identical states. The __hash__ and
 # __eq__ functions allow it to be used as a key in a python dictionary.
 class DawgNode
-  @@next_id = 0
 
-  attr_reader :id, :edges
+  attr_reader :edges
   attr_accessor :final
 
   def initialize
-    @id = @@next_id
-    @@next_id += 1
     @final = false
     @edges = {}
   end
 
-  def to_s
-    arr = [ @final ? 1 : 0 ]
+  # def to_s
+  #   arr = [ @final ? 1 : 0 ]
 
-    for label, node in @edges
-      arr << label
-      arr << node.id.to_s
-    end
+  #   for label, node in @edges.sort
+  #     arr << label
+  #     arr << node.object_id.to_s
+  #   end
 
-    arr.join('_')
-    end
+  #   arr.join('_')
+  # end
+
+  def signature
+    [ @final, @edges.sort.flat_map {|k,v| [k,v.object_id]} ]
+  end
 
   def hash
-    to_s.hash
+    signature.hash
   end
 
   def eql?(other)
-    to_s == other.to_s
+    signature == other.signature
   end
+
+  def all_finals(prefix='')
+    results = []
+    results << prefix if @final
+    # return results unless @edges
+    @edges.each do |letter, node|
+      results += node.all_finals(prefix + letter)
+    end
+    results
+  end
+
 
 end
 
@@ -54,6 +66,14 @@ class Dawg
     # Here is a list of unique nodes that have been checked for
     # duplication.
     @minimized_nodes = {}
+  end
+
+  def load(filename)
+    @root = Marshal.load(File.read(filename))
+  end
+
+  def save(filename)
+    File.open(filename, 'w') {|f| Marshal.dump(@root, f) }
   end
 
   def insert( word )
@@ -78,7 +98,7 @@ class Dawg
     if @unchecked_nodes.empty?
       node = @root
     else
-      node = @unchecked_nodes[-1][2]
+      node = @unchecked_nodes.last[2]
     end
 
     for letter in word[common_prefix..-1].chars
@@ -99,8 +119,9 @@ class Dawg
 
   def minimize( down_to )
     # proceed from the leaf up to a certain point
-    for i in (@unchecked_nodes.size - 1).downto(down_to)
-      parent, letter, child = @unchecked_nodes[i]
+    while @unchecked_nodes.size > down_to
+      parent, letter, child = @unchecked_nodes.pop
+      # минимизированные ноды содержат *эквивалент* текущей ноды?
       if @minimized_nodes.include?(child)
         # replace the child with the previously encountered one
         parent.edges[letter] = @minimized_nodes[child]
@@ -108,17 +129,23 @@ class Dawg
         # add the state to the minimized nodes.
         @minimized_nodes[child] = child
       end
-      @unchecked_nodes.pop
     end
   end
 
   def lookup( word )
     node = @root
     for letter in word.chars
-      return unless node.edges.has_key?(letter)
-      node = node.edges[letter]
+      node = node.edges[letter] or return
     end
     node.final
+  end
+
+  def autocomplete(prefix)
+    node = @root
+    for letter in prefix.chars
+      node = node.edges[letter] or return []
+    end
+    node.all_finals(prefix)
   end
 
   def node_count
@@ -126,35 +153,44 @@ class Dawg
   end
 
   def edge_count
-    count = 0
-    for node in @minimized_nodes
-      count += node.edges.size
-    end
-    count
+    @minimized_nodes.keys.collect {|node| node.edges.size}.inject(0, :+)
   end
 end
 
 
 dawg = Dawg.new
-words = File.read(DICTIONARY).split.sort
-word_count = 0
+if File.exists? DUMP
+  start = Time.now
+  dawg.load(DUMP)
+  puts "Dawg loading took %g s" % (Time.now-start)
+else
+  words = File.read(DICTIONARY).split.sort
+  word_count = 0
 
-start = Time.now
-for word in words
-  word_count += 1
-  dawg.insert(word)
-  if word_count.modulo(100).zero?
-    print "%d\r" % word_count
+  start = Time.now
+  for word in words
+    word_count += 1
+    dawg.insert(word)
+    if word_count.modulo(100).zero?
+      print "%d\r" % word_count
+    end
   end
+  dawg.finish
+  puts "Dawg creation took %g s" % (Time.now-start)
+
+  edge_count = dawg.edge_count
+  puts "Read %d words into %d nodes and %d edges" % [ word_count, dawg.node_count, dawg.edge_count ]
+  puts "This could be stored in as little as %d bytes" % [edge_count * 4]
+  dawg.save(DUMP)
 end
-dawg.finish
-print "Dawg creation took %g s" % (Time.now-start)
 
-edge_count = dawg.edge_count
-print "Read %d words into %d nodes and %d edges" % [ word_count, dawg.node_count, edge_count ]
-print "This could be stored in as little as %d bytes" % edge_count * 4
 
-for word in QUERY
+for word in ARGV
+  puts " #{word} =>"
+  puts dawg.autocomplete(word)
+end
+__END__
+for word in ARGV
   if dawg.lookup( word )
     puts "#{word} is in the dictionary."
   else

@@ -125,7 +125,10 @@ start = time.time()
 for word in words:
     WordCount += 1
     dawg.insert(word)
-    if ( WordCount % 100 ) == 0: print "%d\r" % WordCount,
+    if ( WordCount % 100 ) == 0:
+        print "%d\r" % WordCount,
+        sys.stdout.flush()
+
 dawg.finish()
 print "Dawg creation took %g s" % (time.time()-start)
 
